@@ -10,43 +10,28 @@ async function seed() {
   const db = client.db("hng_stage2");
   const collection = db.collection("profiles");
 
-  // Create unique index on name to prevent duplicates
-  await collection.createIndex({ name: 1 }, { unique: true });
-  await collection.createIndex({ id: 1 }, { unique: true });
-
   const raw = fs.readFileSync(path.join(__dirname, "seed_profiles.json"), "utf8");
-  const { profiles } = JSON.parse(raw);
+  const profiles = JSON.parse(raw);
 
-  let inserted = 0;
-  let skipped = 0;
+  // Add id and created_at to each profile
+  const docs = profiles.map(p => ({
+    id: uuidv4(),
+    name: p.name,
+    gender: p.gender,
+    gender_probability: p.gender_probability,
+    age: p.age,
+    age_group: p.age_group,
+    country_id: p.country_id,
+    country_name: p.country_name,
+    country_probability: p.country_probability,
+    created_at: new Date().toISOString(),
+  }));
 
-  for (const p of profiles) {
-    try {
-      await collection.updateOne(
-        { name: p.name },
-        {
-          $setOnInsert: {
-            id: uuidv4(),
-            name: p.name,
-            gender: p.gender,
-            gender_probability: p.gender_probability,
-            age: p.age,
-            age_group: p.age_group,
-            country_id: p.country_id,
-            country_name: p.country_name,
-            country_probability: p.country_probability,
-            created_at: new Date().toISOString(),
-          },
-        },
-        { upsert: true }
-      );
-      inserted++;
-    } catch (err) {
-      skipped++;
-    }
-  }
+  // Drop old data and reinsert
+  await collection.deleteMany({});
+  await collection.insertMany(docs);
 
-  console.log(`Seeding complete: ${inserted} processed, ${skipped} errors`);
+  console.log(`✅ Seeded ${docs.length} profiles!`);
   await client.close();
 }
 
